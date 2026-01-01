@@ -13,8 +13,14 @@ A modular AI framework that lets you stitch together models and tools into an as
 ## Architecture
 
 - **Rust/Tauri**: Window management, process orchestration, event routing
-- **Python Sidecar**: LangGraph execution, plugin loading, memory management
-- **WebSocket**: Bi-directional JSON-RPC communication
+- **Python Sidecar**: Plugin system, command registry, event emission
+  - **Type-safe**: Full type hints with mypy validation
+  - **Professional logging**: Rotating file handlers and console output
+  - **Plugin system**: Extensible PluginBase class with lifecycle hooks
+- **WebSocket**: Bi-directional JSON-RPC 2.0 communication
+- **Plugins**: Vault-specific extensions with command registration
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design
 
 ## Prerequisites
 
@@ -82,18 +88,32 @@ tailor/
 │   │   └── event_bus.rs         # Event routing
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── sidecar/                      # Python sidecar
-│   ├── main.py                   # Entry point
-│   ├── event_emitter.py          # Event API
-│   ├── websocket_server.py       # WebSocket server
-│   ├── vault_brain.py            # LangGraph orchestrator
+├── sidecar/                      # Python sidecar (✨ refactored)
+│   ├── main.py                   # Entry point with CLI
+│   ├── websocket_server.py       # JSON-RPC 2.0 WebSocket server
+│   ├── vault_brain.py            # Plugin orchestrator
+│   ├── event_emitter.py          # Event emission API
+│   ├── constants.py              # Centralized constants & enums
+│   ├── exceptions.py             # Custom exception hierarchy
+│   ├── api/                      # Plugin API
+│   │   ├── plugin_base.py        # Abstract base class with lifecycle
+│   │   └── __init__.py
+│   ├── utils/                    # Utility modules
+│   │   ├── logging_config.py     # Professional logging system
+│   │   ├── json_rpc.py           # JSON-RPC utilities
+│   │   ├── path_utils.py         # Safe path operations
+│   │   └── __init__.py
 │   └── requirements.txt
 └── example-vault/                # Example vault
-    ├── .vault.json
-    └── plugins/
-        ├── example_plugin.py
-        └── requirements.txt
+    ├── .vault.json               # Vault configuration
+    └── plugins/                  # Vault-specific plugins
+        ├── llm/                  # LLM chat plugin
+        │   └── main.py           # (inherits from PluginBase)
+        └── demo_plugin/          # Demo plugin
+            └── main.py           # (inherits from PluginBase)
 ```
+
+See [PLUGIN_GUIDE.md](PLUGIN_GUIDE.md) for plugin development.
 
 ## Creating a Vault
 
@@ -102,9 +122,14 @@ A vault is a self-contained directory with the following structure:
 ```
 my-vault/
 ├── .vault.json              # Vault metadata
-├── plugins/                 # Python plugins
-│   ├── my_plugin.py
-│   └── requirements.txt
+├── plugins/                 # Plugin directory
+│   ├── requirements.txt     # Shared dependencies
+│   ├── my_plugin/          # Individual plugin
+│   │   ├── main.py         # Entry point (required)
+│   │   └── settings.json   # Plugin configuration
+│   └── another_plugin/
+│       ├── main.py
+│       └── settings.json
 ├── lib/                     # Auto-managed dependencies
 ├── .memory/                 # Conversation history
 └── config/                  # User preferences
@@ -112,42 +137,72 @@ my-vault/
 
 ### Example Plugin
 
+Each plugin is a directory with `main.py` that inherits from `PluginBase`:
+
 ```python
-class Plugin:
-    def __init__(self, emitter):
-        """Initialize with EventEmitter."""
-        self.emitter = emitter
-        self.name = "my_plugin"
+# plugins/my_plugin/main.py
+import sys
+from pathlib import Path
+
+# Add sidecar to path
+sidecar_path = Path(__file__).parent.parent.parent.parent / "sidecar"
+sys.path.insert(0, str(sidecar_path))
+
+from api.plugin_base import PluginBase
+
+class Plugin(PluginBase):
+    """My custom plugin."""
     
-    async def on_tick(self, emitter):
-        """Called every 5 seconds."""
-        emitter.notify("Tick from my plugin!", severity="info")
+    def __init__(self, emitter, brain, plugin_dir, vault_path):
+        """Initialize plugin - automatically sets up logging."""
+        super().__init__(emitter, brain, plugin_dir, vault_path)
+        
+        # Load settings (helper method from PluginBase)
+        settings = self.load_settings()
+        self.my_setting = settings.get("key", "default")
+        
+        # Register commands
+        self.register_commands()
+        
+        self.logger.info("My plugin initialized")
+    
+    def register_commands(self) -> None:
+        """Register plugin commands."""
+        self.brain.register_command(
+            "myPlugin.action",
+            self.custom_action,
+            self.name
+        )
     
     async def custom_action(self, **kwargs):
         """Custom action callable via execute_command."""
-        emitter.notify("Action executed!", severity="success")
+        self.emitter.notify("Action executed!", severity="success")
         return {"status": "ok"}
+    
+    async def on_tick(self, emitter):
+        """Called every 5 seconds - optional lifecycle hook."""
+        self.logger.debug("Tick from my plugin")
 ```
+
+See [PLUGIN_GUIDE.md](PLUGIN_GUIDE.md) for complete plugin development guide.
 
 ## Event Emission
 
-Plugins can emit events using the EventEmitter API:
+Plugins can emit events using the EventEmitter API or command registry:
 
 ```python
-# Window-scoped (default)
+# Via EventEmitter (convenient)
 emitter.notify("Task complete!")
-
-# Progress updates
 emitter.progress(75, "Processing...")
-
-# State updates
 emitter.update_state("task_count", 42)
 
-# Global events (all windows)
-emitter.global_event("SYSTEM_ALERT", {"msg": "Important!"})
+# Via Command Registry (discoverable)
+await brain.execute_command("ui.notify", message="Task complete!", severity="success")
+await brain.execute_command("ui.progress", percent=75, status="Processing...")
 
-# Vault-scoped (all windows with same vault)
-emitter.vault_event("STATE_CHANGED", {"key": "value"})
+# Scoped events
+emitter.global_event("SYSTEM_ALERT", {"msg": "Important!"})  # All windows
+emitter.vault_event("STATE_CHANGED", {"key": "value"})        # Same vault
 ```
 
 ## Building for Production

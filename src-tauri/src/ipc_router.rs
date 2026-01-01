@@ -100,3 +100,32 @@ pub async fn close_vault(
 
     Ok(())
 }
+
+/// Get the current window's vault information
+#[tauri::command]
+pub async fn get_current_vault_info(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<VaultInfo, String> {
+    let window_label = window.label().to_string();
+    
+    // Get vault path
+    let vault_path = state.window_manager
+        .lock()
+        .await
+        .get_vault_path(&window_label)
+        .ok_or_else(|| "Vault not found for this window".to_string())?
+        .clone();
+    
+    // Get WebSocket port
+    let ws_port = state.sidecar_manager
+        .get_ws_port(&window_label)
+        .await
+        .ok_or_else(|| "Sidecar not found for this window".to_string())?;
+    
+    Ok(VaultInfo {
+        window_label,
+        vault_path,
+        ws_port,
+    })
+}

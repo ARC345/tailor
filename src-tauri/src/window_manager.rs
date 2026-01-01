@@ -32,7 +32,7 @@ impl WindowManager {
         let window = WebviewWindowBuilder::new(
             app,
             &window_label,
-            tauri::WebviewUrl::App("index.html".into()),
+            tauri::WebviewUrl::App("vault.html".into()),
         )
         .title(format!("Tailor - {}", Self::extract_vault_name(&vault_path)))
         .inner_size(1200.0, 800.0)

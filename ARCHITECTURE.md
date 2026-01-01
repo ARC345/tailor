@@ -36,68 +36,125 @@ The Tauri application manages windows, processes, and event routing.
 
 ---
 
-### **2. Python Sidecar** (`sidecar/`)
+### **2. Python Sidecar** (`sidecar/`) ✨ **Refactored**
 
-Each vault gets its own isolated Python process.
+Each vault gets its own isolated Python process with professional-grade code quality.
+
+#### **Module Organization**
+
+```
+sidecar/
+├── main.py              # CLI entry point with argparse
+├── websocket_server.py  # JSON-RPC 2.0 WebSocket server
+├── vault_brain.py       # Plugin orchestrator
+├── event_emitter.py     # Event emission API
+├── constants.py         # Centralized constants & enums
+├── exceptions.py        # Custom exception hierarchy
+├── api/
+│   ├── plugin_base.py   # Abstract PluginBase class
+│   └── __init__.py
+└── utils/
+    ├── logging_config.py # Professional logging system
+    ├── json_rpc.py       # JSON-RPC utilities
+    ├── path_utils.py     # Safe path operations
+    └── __init__.py
+```
 
 #### **`main.py`** (Entry Point)
 
-```
-CLI Args: --vault <path> --ws-port <port>
+**CLI Arguments:**
+```bash
+python main.py --vault <path> --ws-port <port> [--log-level DEBUG] [--verbose]
 ```
 
 **Flow:**
-1. Validates vault path exists
-2. Adds `vault/lib/` to `PYTHONPATH` for isolated dependencies
-3. Initializes `WebSocketServer` on allocated port
-4. Creates `EventEmitter` for plugins
-5. Initializes `VaultBrain` (orchestrator)
-6. Runs WebSocket server + tick loop concurrently
+1. Parses CLI arguments with `argparse`
+2. Configures professional logging system (rotating file handler)
+3. Validates vault path with security checks
+4. Adds `vault/lib/` to `PYTHONPATH` for isolated dependencies
+5. Initializes `WebSocketServer` on allocated port
+6. Initializes `VaultBrain` (orchestrator)
+7. Runs WebSocket server + tick loop concurrently
+8. Handles errors with custom exceptions
+
+**Type Safety:** All functions have type hints for IDE support and mypy validation.
 
 #### **`websocket_server.py`**
 
-**JSON-RPC Server** for bi-directional communication:
-- **Receives**: Commands from Rust (e.g., `chat.send_message`, `execute_command`)
-- **Sends**: Responses + events back to Rust
-- **Handlers**: Registered by `VaultBrain` at startup
+**JSON-RPC 2.0 Server** for bi-directional communication:
+
+**Features:**
+- Full JSON-RPC 2.0 compliance with validation
+- Type-safe command handlers with `CommandHandler` type alias
+- Structured error responses with error codes
+- Professional logging (no print statements)
+- Automatic async handler wrapping
 
 **Key Methods:**
-- `register_handler(method, handler)`: Plugins register custom commands
-- `send_to_rust(data)`: Queue messages to Rust (async-safe)
-- `handle_message(message)`: Parse JSON-RPC → call handler → send response
+- `register_handler(method: str, handler: CommandHandler) -> None`
+- `send_to_rust(data: Dict[str, Any]) -> None`
+- `handle_message(message: str) -> None`
+- `get_registered_methods() -> List[str]`
+
+**Uses:** `utils.json_rpc` for message building/validation, `constants` for error codes.
 
 #### **`event_emitter.py`**
 
 **Plugin API** for emitting events to the UI:
 
-```python
-emitter.notify("Task complete!", severity="success")       # Window-scoped
-emitter.progress(75, "Processing...")                      # Progress bar
-emitter.update_state("key", value)                         # UI state
-emitter.global_event("ALERT", {...})                       # All windows
-emitter.vault_event("SYNC", {...})                         # Same vault
-```
+**Features:**
+- Type-safe with enums (`EventType`, `EventScope`, `Severity`)
+- Input validation for scope and severity
+- Logging all event emissions
+- JSON-RPC message building
 
-Each call sends JSON-RPC message via WebSocket to Rust → EventBus routes to UI.
+```python
+from constants import EventType, EventScope, Severity
+
+emitter.notify("Task complete!", severity=Severity.SUCCESS)  # Type-safe
+emitter.progress(75, "Processing...")                        # Progress bar
+emitter.update_state("key", value)                           # UI state
+emitter.emit(EventType.CUSTOM, {...}, scope=EventScope.GLOBAL)
+```
 
 #### **`vault_brain.py`**
 
-**LangGraph Orchestrator** that manages vault-specific operations:
+**Plugin Orchestrator** that manages vault-specific operations:
+
+**Features:**
+- Type-safe plugin loading with validation
+- Command registry with async handler verification
+- Per-plugin logger setup
+- Safe path operations (prevents directory traversal)
+- Structured error handling
 
 **Initialization:**
-1. Loads `.vault.json` config
-2. Creates `.memory/` directory
-3. Discovers and loads plugins from `plugins/*.py`
-4. Builds LangGraph instance (placeholder)
-5. Registers command handlers with WebSocket server
+1. Validates vault path with `utils.path_utils`
+2. Loads and validates `.vault.json` config
+3. Creates `.memory/` directory safely
+4. Discovers plugins using `discover_plugins()`
+5. Validates plugin structure (main.py exists)
+6. Loads plugins with isolated error handling
+7. Builds LangGraph instance (placeholder)
+8. Registers command handlers with WebSocket server
 
 **Plugin Loading:**
-- Scans `vault/plugins/*.py`
+- Scans `vault/plugins/*/main.py` (directory-based plugins)
+- Validates plugin structure before loading
 - Dynamically imports each module
-- Finds `Plugin` class → instantiates with `EventEmitter`
+- Finds `Plugin` class → validates it's async-compatible
+- Instantiates with `EventEmitter`, `VaultBrain`, `plugin_dir`, `vault_path`
+- Uses `get_plugin_logger()` for plugin-specific logging
+
+**Command Registry:**
+- Validates handlers are async functions
+- Provides `execute_command()` with error handling
+- Returns available commands via `get_commands()`
 
 **Tick Loop:**
-- Runs every 5 seconds
+- Runs every 5 seconds (configurable via `DEFAULT_TICK_INTERVAL`)
+- Calls `on_tick()` for plugins that implement it
+- Isolates errors (one plugin failure doesn't crash others)
 - Calls `plugin.on_tick(emitter)` for each plugin
 - Allows plugins to emit periodic events
 
@@ -107,36 +164,128 @@ Each call sends JSON-RPC message via WebSocket to Rust → EventBus routes to UI
 
 ---
 
-### **3. Plugin System**
+### **3. Plugin System** \u2728 **Standardized**
 
-#### **Example Plugin Structure** (`example-vault/plugins/example_plugin.py`)
+Plugins use a **command registry pattern** similar to VSCode and Obsidian, where they register commands that can be executed by anyone (UI, other plugins, keyboard shortcuts, etc.).
 
-**Required Structure:**
+#### **PluginBase Abstract Class** (`sidecar/api/plugin_base.py`)
+
+All plugins now inherit from `PluginBase`, which provides:
+
+**Automatic Setup:**
+- Plugin name from directory
+- Logger configuration (`self.logger`)
+- State tracking (`self.is_loaded`)
+
+**Lifecycle Hooks:**
+- `__init__()` - Plugin instantiation
+- `register_commands()` - Required: Register plugin commands
+- `async on_load()` - Optional: Called after all plugins loaded
+- `async on_tick(emitter)` - Optional: Called every 5 seconds
+- `async on_unload()` - Optional: Cleanup before shutdown
+
+**Helper Methods:**
+- `load_settings(filename="settings.json")` - Load plugin config
+- `save_settings(settings, filename="settings.json")` - Save plugin config
+- `get_config_path(filename)` - Get path to config file
+
+#### **Plugin Structure** (`vault/plugins/my_plugin/`)
+
+```
+my_plugin/
+\u251c\u2500\u2500 main.py          # Required: Plugin class inheriting from PluginBase
+\u251c\u2500\u2500 settings.json    # Optional: Plugin configuration
+\u2514\u2500\u2500 README.md        # Optional: Documentation
+```
+
+#### **Example Plugin** (`example-vault/plugins/demo_plugin/main.py`)
+
 ```python
-class Plugin:
-    def __init__(self, emitter):
-        self.emitter = emitter
-        self.name = "example_plugin"
-        # Send init notification
-        emitter.notify("Plugin loaded!", severity="success")
+import sys
+from pathlib import Path
+from typing import Dict, Any
+
+# Add sidecar to path
+sidecar_path = Path(__file__).parent.parent.parent.parent / "sidecar"
+sys.path.insert(0, str(sidecar_path))
+
+from api.plugin_base import PluginBase
+
+class Plugin(PluginBase):
+    """Demo plugin showing PluginBase usage."""
     
-    async def on_tick(self, emitter):
-        """Called every 5 seconds"""
-        # Every 15 seconds (3 ticks), send notification
-        if self.tick_count % 3 == 0:
-            emitter.notify("Heartbeat!", severity="info")
+    def __init__(self, emitter, brain, plugin_dir, vault_path):
+        """Initialize plugin - automatic logging setup."""
+        super().__init__(emitter, brain, plugin_dir, vault_path)
+        
+        # Load settings
+        settings = self.load_settings()  # Helper method
+        self.my_setting = settings.get("key", "default")
+        
+        # Register commands
+        self.register_commands()
+        
+        self.logger.info("Plugin initialized")  # Automatic logger
     
-    async def custom_action(self, **kwargs):
-        """Custom command via execute_command"""
-        emitter.notify("Action executed!", severity="success")
-        return {"status": "completed"}
+    def register_commands(self) -> None:
+        """Register plugin commands - REQUIRED."""
+        self.brain.register_command(
+            "demo.hello",
+            self.handle_hello,
+            self.name  # Automatic plugin name
+        )
+    
+    async def handle_hello(self, name: str = "World", **kwargs) -> Dict[str, Any]:
+        """Command handler with type hints."""
+        message = f"Hello, {name}!"
+        self.emitter.notify(message, severity="success")
+        return {"status": "ok", "message": message}
+    
+    async def on_load(self) -> None:
+        """Called after all plugins loaded."""
+        await super().on_load()
+        self.emitter.notify("Demo plugin loaded!", severity="success")
+    
+    async def on_tick(self, emitter) -> None:
+        """Called every 5 seconds - optional."""
+        self.logger.debug("Tick from demo plugin")
+```
+
+**See [PLUGIN_GUIDE.md](file:///C:/Users/ARC/Dev/tailor/PLUGIN_GUIDE.md) for complete documentation.**
+
+#### **Plugin Development Best Practices**
+
+1. **Always inherit from PluginBase**
+2. **Use type hints** for all functions
+3. **Use `self.logger`** instead of `print()`
+4. **Validate input** in command handlers
+5. **Handle errors gracefully** with try-except
+6. **Use `load_settings()`** for configuration
+
+#### **Command Registry API**
+
+**Register Command:**
+```python
+brain.register_command(command_id, handler, plugin_name)
+# Example: brain.register_command("database.query", self.query, "database")
+```
+
+**Execute Command** (from any plugin):
+```python
+result = await self.brain.execute_command("database.query", table="users")
+```
+
+**List Commands:**
+```python
+commands = brain.get_commands()
+# Returns: {"example.customAction": {"plugin": "example_plugin"}, ...}
 ```
 
 **Plugin Lifecycle:**
 1. **Load**: `VaultBrain._load_plugins()` imports module
-2. **Init**: `Plugin(emitter)` constructor called
+2. **Init**: `Plugin(emitter, brain)` constructor called, commands registered
 3. **Tick**: `on_tick()` called every 5s by tick loop
-4. **Commands**: Custom methods invoked via `execute_command`
+4. **Commands**: Executed via `brain.execute_command(command_id, **args)`
 
 ---
 
@@ -332,6 +481,53 @@ sequenceDiagram
 
 ---
 
+### **Flow 5: Plugin-to-Plugin Communication**
+
+```mermaid
+sequenceDiagram
+    participant PluginA as Plugin A (API)
+    participant Brain as VaultBrain
+    participant PluginB as Plugin B (Database)
+    participant PluginC as Plugin C (Cache)
+    
+    Note over PluginA: User requests data
+    PluginA->>Brain: execute_command("cache.get", key="users")
+    Brain->>PluginC: handler(**kwargs)
+    PluginC->>Brain: return None (cache miss)
+    Brain->>PluginA: return None
+    
+    PluginA->>Brain: execute_command("database.query", table="users")
+    Brain->>PluginB: handler(**kwargs)
+    PluginB->>PluginB: Query database
+    PluginB->>Brain: return {rows: [...]}
+    Brain->>PluginA: return {rows: [...]}
+    
+    PluginA->>Brain: execute_command("cache.set", key="users", value=data)
+    Brain->>PluginC: handler(**kwargs)
+    PluginC->>PluginC: Store in cache
+    PluginC->>Brain: return {cached: true}
+    Brain->>PluginA: return {cached: true}
+```
+
+**Step-by-Step:**
+
+1. **Plugin A** (API plugin) receives request for user data
+2. **Check cache**: Calls `brain.execute_command("cache.get", key="users")`
+3. **Cache miss**: Plugin C returns `None`
+4. **Query database**: Calls `brain.execute_command("database.query", table="users")`
+5. **Plugin B** queries database and returns data
+6. **Store in cache**: Calls `brain.execute_command("cache.set", key="users", value=data)`
+7. **Plugin C** caches the data
+8. **Plugin A** returns data to user
+
+**Benefits:**
+- Plugins don't need direct references to each other
+- Commands can be called even if plugin isn't loaded yet
+- Easy to test (mock the command registry)
+- Discoverable via `brain.get_commands()`
+
+---
+
 ## **Event Routing Scopes**
 
 The EventBus supports three routing scopes:
@@ -461,6 +657,10 @@ tailor/
 - Event emission API (notify, progress, state)
 - Event routing (window/vault/global scopes)
 - Dependency auto-installation
+- **Command Registry System** (VSCode/Obsidian-style)
+  - `register_command()` for plugin command registration
+  - `execute_command()` for calling commands
+  - Plugin-to-plugin communication via commands
 
 ### **🚧 Placeholders/TODO:**
 - **LangGraph Integration**: Currently just a dict in `vault_brain.py`
@@ -468,6 +668,7 @@ tailor/
 - **Rust WebSocket Client**: `send_to_sidecar` in `ipc_router.rs` needs implementation
 - **Full Chat Processing**: `handle_chat` currently echoes instead of using LLM
 - **Window UI**: Each vault window needs actual UI (currently just shows launcher)
+- **Command Palette UI**: Build command palette/picker using `brain.get_commands()`
 
 ---
 

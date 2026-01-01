@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vault</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace, system-ui, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            padding: 15px;
+            max-width: 900px;
+            margin: 0 auto;
+            line-height: 1.4;
+        }
+
+        h1 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            color: #00d4ff;
+        }
+
+        .section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #222;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 6px 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 3px;
+            color: #e0e0e0;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+
+        textarea {
+            min-height: 50px;
+            font-family: monospace;
+        }
+
+        button {
+            padding: 6px 14px;
+            border: 1px solid #00d4ff;
+            background: #0a0a0a;
+            color: #00d4ff;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-right: 8px;
+            font-size: 0.9rem;
+        }
+
+        button:hover {
+            background: #1a1a1a;
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+        }
+
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            border-color: #333;
+            color: #555;
+        }
+
+        .status {
+            padding: 6px 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 3px;
+            font-size: 0.85rem;
+        }
+
+        .status.connected {
+            background: #0d2818;
+            border-color: #00d4ff;
+            color: #00ff88;
+        }
+
+        .status.error {
+            background: #2a0d0d;
+            border-color: #ff4444;
+            color: #ff6666;
+        }
+
+        #log {
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 350px;
+            overflow-y: auto;
+            background: #0f0f0f;
+            padding: 8px;
+            border: 1px solid #222;
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            padding: 1px 0;
+            border-bottom: 1px solid #151515;
+        }
+
+        .timestamp {
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Vault</h1>
+
+    <div class="section">
+        <label>Port</label>
+        <input type="number" id="port" value="9001">
+        <button onclick="connect()" id="connBtn">Connect</button>
+        <button onclick="disconnect()" id="discBtn">Disconnect</button>
+        <div class="status" id="status">Disconnected</div>
+    </div>
+
+    <!-- Plugin UIs -->
+    <div id="plugin-container"></div>
+
+    <div class="section">
+        <label>Message</label>
+        <input type="text" id="msg" placeholder="Type message...">
+        <button onclick="send()" id="sendBtn" disabled>Send</button>
+    </div>
+
+    <div class="section">
+        <label>Command</label>
+        <input type="text" id="cmd" placeholder="e.g. demo_plugin.greet">
+        <label>Args (JSON)</label>
+        <textarea id="args">{}</textarea>
+        <button onclick="exec()" id="execBtn" disabled>Execute</button>
+    </div>
+
+    <div class="section">
+        <button onclick="list()" id="listBtn" disabled>List Commands</button>
+        <button onclick="info()" id="infoBtn" disabled>Vault Info</button>
+        <button onclick="clear()">Clear Log</button>
+    </div>
+
+    <div class="section">
+        <label>Log</label>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let id = 0;
+        const pending = new Map();
+
+        function log(msg, type = '') {
+            const el = document.createElement('div');
+            el.className = 'log-entry';
+            const timestamp = document.createElement('span');
+            timestamp.className = 'timestamp';
+            timestamp.textContent = `[${new Date().toLocaleTimeString()}] `;
+            el.appendChild(timestamp);
+
+            const content = document.createTextNode(msg);
+            el.appendChild(content);
+
+            document.getElementById('log').appendChild(el);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+
+        function clear() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function updateUI(connected) {
+            const status = document.getElementById('status');
+            status.textContent = connected ? `Connected (${document.getElementById('port').value})` : 'Disconnected';
+            status.className = connected ? 'status connected' : 'status';
+            ['sendBtn', 'execBtn', 'listBtn', 'infoBtn'].forEach(id => {
+                document.getElementById(id).disabled = !connected;
+            });
+        }
+
+        function connect() {
+            const port = document.getElementById('port').value;
+            if (ws && ws.readyState === WebSocket.OPEN) return;
+
+            ws = new WebSocket(`ws://localhost:${port}`);
+            ws.onopen = () => { log('Connected'); updateUI(true); };
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                log(`← ${JSON.stringify(data)}`);
+                if (data.id && pending.has(data.id)) {
+                    pending.get(data.id)(data);
+                    pending.delete(data.id);
+                }
+            };
+            ws.onerror = () => log('Error', 'error');
+            ws.onclose = () => { log('Disconnected'); updateUI(false); ws = null; };
+        }
+
+        function disconnect() {
+            if (ws) ws.close();
+        }
+
+        function req(method, params = {}) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            const msg = { jsonrpc: "2.0", id: ++id, method, params };
+            log(`→ ${JSON.stringify(msg)}`);
+            ws.send(JSON.stringify(msg));
+            return new Promise(resolve => pending.set(id, resolve));
+        }
+
+        function send() {
+            req('chat.send_message', { message: document.getElementById('msg').value });
+        }
+
+        function exec() {
+            const args = JSON.parse(document.getElementById('args').value || '{}');
+            req('execute_command', { command: document.getElementById('cmd').value, args });
+        }
+
+        function list() {
+            req('list_commands');
+        }
+
+        function info() {
+            req('get_vault_info');
+        }
+
+        document.getElementById('msg').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !document.getElementById('sendBtn').disabled) send();
+        });
+
+        // Auto-connect when vault window opens
+        (async () => {
+            try {
+                const { invoke } = await import('@tauri-apps/api/core');
+                // Query vault info from Tauri
+                const vaultInfo = await invoke('get_current_vault_info');
+                log(`Vault: ${vaultInfo.vault_path}`);
+                document.getElementById('port').value = vaultInfo.ws_port;
+                setTimeout(() => connect(), 500); // Small delay for sidecar startup
+            } catch (e) {
+                // Running outside Tauri (e.g., in browser for testing)
+                log('Running in standalone mode. Enter port and click Connect.');
+            }
+        })();
+
+        // Load plugin UIs
+        async function loadPluginUIs() {
+            try {
+                // Get list of commands to find plugins with UI
+                const result = await req('list_commands');
+                log('Loading plugin UIs...');
+
+                // Look for plugins with UI
+                const pluginsWithUI = ['llm']; // Hardcoded for now
+
+                for (const pluginName of pluginsWithUI) {
+                    try {
+                        const uiResult = await req('execute_command', {
+                            command: `${pluginName}.get_ui`,
+                            args: {}
+                        });
+
+                        if (uiResult && uiResult.result && uiResult.result.html) {
+                            const container = document.getElementById('plugin-container');
+                            const section = document.createElement('div');
+                            section.className = 'section';
+                            section.innerHTML = uiResult.result.html;
+                            container.appendChild(section);
+                            log(`Loaded ${pluginName} UI`);
+                        }
+                    } catch (e) {
+                        log(`Failed to load ${pluginName} UI: ${e.message}`);
+                    }
+                }
+            } catch (e) {
+                log(`Plugin UI load error: ${e.message}`);
+            }
+        }
+
+        // Load plugin UIs after successful connection
+        const originalUpdateUI = updateUI;
+        updateUI = function (connected) {
+            originalUpdateUI(connected);
+            if (connected) {
+                setTimeout(() => loadPluginUIs(), 1000);
+            }
+        };
+    </script>
+</body>
+
+</html>

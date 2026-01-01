@@ -32,5 +32,9 @@ example-vault/.memory/
 example-vault/lib/
 example-vault/config/
 
-# Logs
+# Logs and build artifacts
 *.log
+build-log.txt
+build-errors.txt
+build-check.ps1
+

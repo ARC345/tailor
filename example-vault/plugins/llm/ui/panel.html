@@ -1,0 +1,207 @@
+<div class="plugin-panel llm-panel">
+    <h3>💬 LLM Chat</h3>
+
+    <div class="conversation" id="llm-conversation">
+        <div class="welcome-message">
+            Send a message to start chatting with the LLM assistant.
+        </div>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="llm-input" placeholder="Type your message..." class="llm-input" />
+        <button onclick="llmSend()" class="llm-send-btn">Send</button>
+        <button onclick="llmClear()" class="llm-clear-btn">Clear</button>
+    </div>
+</div>
+
+<style>
+    .llm-panel {
+        background: #0f0f0f;
+        border: 1px solid #222;
+        border-radius: 3px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .llm-panel h3 {
+        margin: 0 0 12px 0;
+        font-size: 1rem;
+        color: #00d4ff;
+        border-bottom: 1px solid #222;
+        padding-bottom: 8px;
+    }
+
+    .conversation {
+        min-height: 200px;
+        max-height: 400px;
+        overflow-y: auto;
+        background: #0a0a0a;
+        border: 1px solid #222;
+        border-radius: 3px;
+        padding: 10px;
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+    }
+
+    .welcome-message {
+        color: #555;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .message {
+        margin-bottom: 12px;
+        padding: 8px;
+        border-radius: 3px;
+    }
+
+    .message.user {
+        background: #1a1a1a;
+        border-left: 2px solid #00d4ff;
+    }
+
+    .message.assistant {
+        background: #0d2818;
+        border-left: 2px solid #00ff88;
+    }
+
+    .message-role {
+        font-size: 0.8rem;
+        color: #888;
+        margin-bottom: 4px;
+    }
+
+    .message-content {
+        color: #e0e0e0;
+        line-height: 1.4;
+    }
+
+    .input-area {
+        display: flex;
+        gap: 8px;
+    }
+
+    .llm-input {
+        flex: 1;
+        padding: 8px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 3px;
+        color: #e0e0e0;
+        font-family: inherit;
+        font-size: 0.9rem;
+    }
+
+    .llm-input:focus {
+        outline: none;
+        border-color: #00d4ff;
+    }
+
+    .llm-send-btn,
+    .llm-clear-btn {
+        padding: 8px 16px;
+        border: 1px solid #00d4ff;
+        background: #0a0a0a;
+        color: #00d4ff;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .llm-send-btn:hover,
+    .llm-clear-btn:hover {
+        background: #1a1a1a;
+        box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+    }
+
+    .llm-clear-btn {
+        border-color: #ff4444;
+        color: #ff6666;
+    }
+
+    .llm-clear-btn:hover {
+        box-shadow: 0 0 8px rgba(255, 68, 68, 0.3);
+    }
+</style>
+
+<script>
+    async function llmSend() {
+        const input = document.getElementById('llm-input');
+        const message = input.value.trim();
+
+        if (!message) return;
+
+        // Add user message to conversation immediately
+        addMessageToConversation('user', message);
+
+        // Clear input
+        input.value = '';
+
+        // Send to plugin
+        try {
+            await req('execute_command', {
+                command: 'llm.send',
+                args: { message: message }
+            });
+        } catch (e) {
+            console.error('LLM send error:', e);
+            log(`LLM error: ${e.message}`, 'error');
+        }
+    }
+
+    async function llmClear() {
+        try {
+            await req('execute_command', {
+                command: 'llm.clear',
+                args: {}
+            });
+
+            // Clear conversation UI
+            const conversation = document.getElementById('llm-conversation');
+            conversation.innerHTML = '<div class="welcome-message">Conversation cleared. Send a message to start chatting.</div>';
+        } catch (e) {
+            console.error('LLM clear error:', e);
+        }
+    }
+
+    function addMessageToConversation(role, content) {
+        const conversation = document.getElementById('llm-conversation');
+
+        // Remove welcome message if present
+        const welcome = conversation.querySelector('.welcome-message');
+        if (welcome) welcome.remove();
+
+        // Create message element
+        const messageEl = document.createElement('div');
+        messageEl.className = `message ${role}`;
+        messageEl.innerHTML = `
+        <div class="message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
+        <div class="message-content">${escapeHtml(content)}</div>
+    `;
+
+        conversation.appendChild(messageEl);
+        conversation.scrollTop = conversation.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Listen for LLM response events
+    if (typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'LLM_RESPONSE') {
+                const { assistant_message } = event.data.payload;
+                addMessageToConversation('assistant', assistant_message);
+            }
+        });
+    }
+
+    // Allow Enter to send
+    document.getElementById('llm-input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') llmSend();
+    });
+</script>

@@ -45,6 +45,7 @@ fn main() {
             ipc_router::open_vault,
             ipc_router::send_to_sidecar,
             ipc_router::close_vault,
+            ipc_router::get_current_vault_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
