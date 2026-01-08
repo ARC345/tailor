@@ -17,7 +17,7 @@ try:
     from langchain_openai import ChatOpenAI
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     OPENAI_AVAILABLE = True
-except ImportError:
+except ImportError: #TODO remove this when we have a proper LLM integration
     OPENAI_AVAILABLE = False
     logger.warning("langchain-openai not installed. Using placeholder responses.")
 
@@ -47,6 +47,8 @@ class PipelineConfig:
     enable_streaming: bool = False
     api_key: Optional[str] = None
     
+    # TODO: move api_key to an .env file which should be ignored by git. REASON: security
+    # TODO: get the dict from the vault brain
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "PipelineConfig":
         """Create config from dictionary."""
@@ -150,6 +152,8 @@ class LLMPipeline:
         self._logger.info(f"Processing message: {message[:50]}...")
         
         try:
+            # TODO test with some more complex hooking strategies too see whats faster
+
             # Phase 1: Input Transform
             ctx = await self._run_input_transform(ctx)
             
