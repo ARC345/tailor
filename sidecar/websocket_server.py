@@ -11,9 +11,7 @@ from typing import Optional, Dict, Any, Callable, Awaitable, cast
 import websockets
 from websockets.exceptions import ConnectionClosed
 import inspect
-
 from loguru import logger
-
 from . import utils
 from . import constants
 from . import exceptions
@@ -23,7 +21,6 @@ from . import exceptions
 CommandHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
 
 logger = logger.bind(name=__name__)
-
 
 class WebSocketServer:
     """
@@ -70,16 +67,9 @@ class WebSocketServer:
             >>> server.register_handler("chat.send", handle_chat)
         """
         if not inspect.iscoroutinefunction(handler):
-            logger.warning(f"Handler for '{method}' is not async, wrapping it")
-            # Wrap sync function in async
-            async def async_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
-                result = handler(params)
-                if asyncio.iscoroutine(result):
-                    return cast(Dict[str, Any], await result)
-                return cast(Dict[str, Any], result)
-            self.command_handlers[method] = async_wrapper
-        else:
-            self.command_handlers[method] = handler
+            raise TypeError(f"Handler for '{method}' must be an async function (coroutine).")
+            
+        self.command_handlers[method] = handler
         
         logger.debug(f"Registered handler for method: {method}")
     
@@ -132,15 +122,7 @@ class WebSocketServer:
         
         finally:
             self.connection = None
-            logger.debug("Connection closed. Shutting down sidecar.")
-            # Auto-shutdown when client disconnects (Sidecar is scoped to a window)
-            try:
-                loop = asyncio.get_running_loop()
-                loop.stop()
-            except Exception:
-                pass
-            import sys
-            sys.exit(0)
+            logger.debug("Connection closed")
     
     async def handle_message(self, message: str) -> None:
         """
@@ -183,7 +165,7 @@ class WebSocketServer:
             # Call handler if registered
             if method in self.command_handlers:
                 try:
-                    result = await self.command_handlers[method](params)
+                    result = await self.command_handlers[method](**params)
                     
                     # Send success response
                     response = utils.build_response(result, request_id=request_id)
@@ -217,6 +199,7 @@ class WebSocketServer:
        
         except Exception as e:
             logger.exception(f"Unexpected error handling message: {e}")
+            self.close()
     
     async def send(self, data: Dict[str, Any]) -> None:
         """
@@ -225,16 +208,27 @@ class WebSocketServer:
         Args:
             data: Message data (will be JSON encoded)
         """
-        if self.connection:
+        if self.is_connected():
             try:
-                message = json.dumps(data)
-                await self.connection.send(message)
+                await self.connection.send(json.dumps(data))
                 logger.debug(f"Sent message: {data.get('method', 'response')}")
             except Exception as e:
                 logger.exception(f"Send error: {e}")
+                self.close()
         else:
             logger.warning("No active connection, cannot send message")
     
+    def close(self) -> None:
+        """
+        Close the WebSocket connection.
+        """
+        if self.connection:
+            try:
+                self.connection.close()
+                logger.debug("Connection closed")
+            except Exception as e:
+                logger.exception(f"Close error: {e}")
+
     def send_to_rust(self, data: Dict[str, Any]) -> None:
         """
         Send data to Rust (safe to call from sync or async context).

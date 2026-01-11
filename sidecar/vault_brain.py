@@ -76,7 +76,6 @@ class VaultBrain:
         self.subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
         self.ws_server = ws_server
         
-        self.memory: Optional[Dict[str, Any]] = None
         self.config: Dict[str, Any] = {}
         self.graph: Optional[Dict[str, Any]] = None
         
@@ -106,9 +105,6 @@ class VaultBrain:
         
         # Load Config
         self.config = self._load_config()
-        
-        # Initialize Memory
-        self._init_memory()
         
         # Initialize LLM Pipeline with config
         llm_config = self.config.get("llm", {})
@@ -171,15 +167,32 @@ class VaultBrain:
         Instantiates plugins and calls register_commands().
         Side-effect free (no active code execution).
         """
-        plugin_dirs = utils.discover_plugins(self.vault_path)
+        plugins_dir = utils.get_plugins_dir(self.vault_path)
+    
+        if not plugins_dir:
+            logger.info("No plugins found in vault")
+            return
+    
+        logger.debug(f"Scanning plugins directory: {plugins_dir}")
+    
+        plugin_dirs = []
+        for item in plugins_dir.iterdir():
+            if item.is_file():
+                continue
+            if item.name.startswith(('.', '_')):
+                continue
+        
+            main_file = item / constants.PLUGIN_MAIN_FILE
+            if main_file.exists():
+                plugin_dirs.append(item)
+
+        plugin_dirs = sorted(plugin_dirs, key=lambda p: p.name)
+    
         if not plugin_dirs:
             logger.info("No plugins found in vault")
             return
         
-        # NOTE: logic updated to respect settings.json as the single source for enablement
-        
         loaded_count = 0
-        
         for plugin_dir in plugin_dirs:
             plugin_name = plugin_dir.name
             # 1. Load defaults from settings.json (if exists)
@@ -354,16 +367,16 @@ class VaultBrain:
 
         # Connect WebSocket handlers
         
-        async def chat_handler(p: Dict[str, Any]) -> Dict[str, Any]:
-            return await handle_chat(str(p.get("message", "")))
+        async def chat_handler(message: str = "", **kwargs) -> Dict[str, Any]:
+            return await handle_chat(str(message))
             
-        async def execute_handler(p: Dict[str, Any]) -> Any:
-            return await self.execute_command(str(p.get("command")), **p.get("args", {}))
+        async def execute_handler(command: str = "", args: Dict[str, Any] = None, **kwargs) -> Any:
+            return await self.execute_command(str(command), **(args or {}))
             
-        async def list_handler(p: Dict[str, Any]) -> Dict[str, Any]:
+        async def list_handler(**kwargs) -> Dict[str, Any]:
             return await list_commands()
             
-        async def info_handler(p: Dict[str, Any]) -> Dict[str, Any]:
+        async def info_handler(**kwargs) -> Dict[str, Any]:
             return await get_info()
 
         self.ws_server.register_handler(f"{constants.CHAT_COMMAND_PREFIX}send_message", chat_handler)
@@ -372,7 +385,7 @@ class VaultBrain:
         self.ws_server.register_handler("get_vault_info", info_handler)
         
         # Client Ready Signal
-        async def client_ready(p: Dict[str, Any]):
+        async def client_ready(**kwargs):
             logger.info("Client ready signal received. Triggering plugin hooks...")
             # Trigger on_client_connected for all plugins
             for name, plugin in self.plugins.items():
@@ -385,10 +398,7 @@ class VaultBrain:
         self.ws_server.register_handler("system.client_ready", client_ready)
         
         # Plugin Management Commands
-        async def install_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
-            repo_url = p.get("repo_url", "")
-            plugin_id = p.get("plugin_id")
-            
+        async def install_plugin(repo_url: str = "", plugin_id: str = None, **kwargs) -> Dict[str, Any]:
             if not repo_url:
                 return {"status": "error", "error": "repo_url is required"}
             
@@ -400,9 +410,7 @@ class VaultBrain:
                 "manifest": result.manifest
             }
         
-        async def update_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
-            plugin_id = p.get("plugin_id", "")
-            
+        async def update_plugin(plugin_id: str = "", **kwargs) -> Dict[str, Any]:
             if not plugin_id:
                 return {"status": "error", "error": "plugin_id is required"}
             
@@ -413,9 +421,7 @@ class VaultBrain:
                 "message": result.message
             }
         
-        async def uninstall_plugin(p: Dict[str, Any]) -> Dict[str, Any]:
-            plugin_id = p.get("plugin_id", "")
-            
+        async def uninstall_plugin(plugin_id: str = "", **kwargs) -> Dict[str, Any]:
             if not plugin_id:
                 return {"status": "error", "error": "plugin_id is required"}
             
@@ -426,7 +432,8 @@ class VaultBrain:
                 "message": f"Plugin '{plugin_id}' uninstalled" if success else "Uninstall failed"
             }
         
-        async def list_plugins(p: Dict[str, Any]) -> Dict[str, Any]:
+        async def list_plugins(**kwargs) -> Dict[str, Any]:
+            # Ignores args anyway
             plugins = self.plugin_installer.list_installed()
             return {
                 "status": "success",
@@ -483,8 +490,8 @@ class VaultBrain:
         """
         Send a raw event to the Frontend via WebSocket.
         """
-        if not self.ws_server:
-            logger.warning(f"Cannot emit '{event_type}': No WebSocket server")
+        if not self.is_client_connected:
+            logger.debug(f"Skipping '{event_type}': Client not connected")
             return
 
 
@@ -515,18 +522,16 @@ class VaultBrain:
         handlers = self.subscribers.get(event, [])
         if not handlers:
             return
-            
-        # Execute concurrent, isolated
-        tasks = []
-        for h in handlers:
-            tasks.append(self._safe_exec(h, event, **kwargs))
-        await asyncio.gather(*tasks)
+                    
+        async def safe_exec(h: EventHandler) -> None:
+            try:
+                await h(**kwargs)
+            except Exception as e:
+                logger.exception(f"Event handler failed for '{event}': {e}")
 
-    async def _safe_exec(self, h, evt, **kwargs):
-        try:
-            await h(**kwargs)
-        except Exception as e:
-            logger.exception(f"Event handler failed for '{evt}': {e}")
+        # Execute concurrent, isolated
+        await asyncio.gather(*(safe_exec(h) for h in handlers))
+
 
     # =========================================================================
     # Config & Utils
@@ -546,11 +551,6 @@ class VaultBrain:
         default["id"] = str(self.vault_path)
         default["name"] = self.vault_path.name
         return default
-
-    def _init_memory(self) -> None:
-        """Init .memory dir."""
-        memory_dir = utils.get_memory_dir(self.vault_path, create=True)
-        self.memory = {"path": memory_dir}
 
     async def tick_loop(self) -> None:
         logger.info("Starting tick loop...")
