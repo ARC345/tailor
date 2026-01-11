@@ -132,7 +132,15 @@ class WebSocketServer:
         
         finally:
             self.connection = None
-            logger.debug("Connection closed")
+            logger.debug("Connection closed. Shutting down sidecar.")
+            # Auto-shutdown when client disconnects (Sidecar is scoped to a window)
+            try:
+                loop = asyncio.get_running_loop()
+                loop.stop()
+            except Exception:
+                pass
+            import sys
+            sys.exit(0)
     
     async def handle_message(self, message: str) -> None:
         """
