@@ -8,6 +8,7 @@ import pytest
 import asyncio
 import json
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
+import inspect
 from sidecar.websocket_server import WebSocketServer, CommandHandler
 from sidecar import exceptions
 from sidecar import utils
@@ -52,7 +53,7 @@ class TestWebSocketServer:
         server.register_handler("test.method", handler)
         assert "test.method" in server.command_handlers
         # Should be wrapped in async
-        assert asyncio.iscoroutinefunction(server.command_handlers["test.method"])
+        assert inspect.iscoroutinefunction(server.command_handlers["test.method"])
 
     @pytest.mark.asyncio
     async def test_send_to_rust_connected(self, server, mock_ws):

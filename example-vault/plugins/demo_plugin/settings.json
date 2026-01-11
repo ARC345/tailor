@@ -1,4 +1,4 @@
 {
-    "enabled": true,
-    "test_mode": false
+  "counter": 0,
+  "enabled": true
 }

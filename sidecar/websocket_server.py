@@ -9,8 +9,8 @@ import asyncio
 import json
 from typing import Optional, Dict, Any, Callable, Awaitable, cast
 import websockets
-from websockets.server import WebSocketServerProtocol # type: ignore
 from websockets.exceptions import ConnectionClosed
+import inspect
 
 from loguru import logger
 
@@ -49,7 +49,7 @@ class WebSocketServer:
         """
         self.port = port
         self.host = host
-        self.connection: Optional[WebSocketServerProtocol] = None
+        self.connection: Optional[Any] = None
         self.message_queue: asyncio.Queue = asyncio.Queue()
         self.command_handlers: Dict[str, CommandHandler] = {}
         self.pending_messages: list[Dict[str, Any]] = []
@@ -69,7 +69,7 @@ class WebSocketServer:
             ...     return {"status": "ok"}
             >>> server.register_handler("chat.send", handle_chat)
         """
-        if not asyncio.iscoroutinefunction(handler):
+        if not inspect.iscoroutinefunction(handler):
             logger.warning(f"Handler for '{method}' is not async, wrapping it")
             # Wrap sync function in async
             async def async_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -109,7 +109,7 @@ class WebSocketServer:
             # Run forever
             await asyncio.Future()
     
-    async def handle_connection(self, websocket: WebSocketServerProtocol) -> None:
+    async def handle_connection(self, websocket: Any) -> None:
         """
         Handle incoming WebSocket connection.
         

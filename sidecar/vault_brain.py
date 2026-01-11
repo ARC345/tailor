@@ -10,6 +10,7 @@ import json
 import importlib.util
 import sys
 import time
+import inspect
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, Awaitable, cast, List
 from collections import defaultdict
@@ -17,7 +18,8 @@ from collections import defaultdict
 from . import utils
 from . import constants
 from . import exceptions
-from .llm import HookRegistry, LLMPipeline, PipelineConfig
+
+from .pipeline import PipelineManager, DefaultPipeline, GraphPipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
 
 # Local import avoids circular dependency in type checking if used carefully
@@ -78,9 +80,9 @@ class VaultBrain:
         self.config: Dict[str, Any] = {}
         self.graph: Optional[Dict[str, Any]] = None
         
-        # LLM Processing Pipeline with Hook System
-        self.hook_registry = HookRegistry()
-        self.llm_pipeline: Optional[LLMPipeline] = None
+        # LLM Processing Pipeline
+        self.pipeline_manager = PipelineManager()
+        self.pipeline: Optional[Any] = None # DefaultPipeline or GraphPipeline
         
         # Plugin Installer
         self.plugin_installer = PluginInstaller(self.vault_path)
@@ -110,8 +112,13 @@ class VaultBrain:
         
         # Initialize LLM Pipeline with config
         llm_config = self.config.get("llm", {})
-        pipeline_config = PipelineConfig.from_dict(llm_config)
-        self.llm_pipeline = LLMPipeline(self.hook_registry, pipeline_config)
+        pipeline_config = PipelineConfig(**llm_config) if llm_config else PipelineConfig()
+        
+        # Decide between Default and Graph pipeline
+        if pipeline_config.is_graph_mode:
+            self.pipeline = GraphPipeline(self.pipeline_manager, pipeline_config)
+        else:
+            self.pipeline = DefaultPipeline(self.pipeline_manager, pipeline_config)
         
         # Register Core Commands
         self._register_core_commands()
@@ -269,7 +276,7 @@ class VaultBrain:
         plugin_name: Optional[str] = None
     ) -> None:
         """Register a command."""
-        if not asyncio.iscoroutinefunction(handler):
+        if not inspect.iscoroutinefunction(handler):
             raise exceptions.CommandRegistrationError(command_id, "Handler must be an async function")
         
         if command_id in self.commands:
@@ -308,13 +315,16 @@ class VaultBrain:
         
         # Chat - Now uses LLM Pipeline
         async def handle_chat(message: str = "", history: List[Dict[str, str]] = None) -> Dict[str, Any]:
-            if self.llm_pipeline:
-                result = await self.llm_pipeline.process(
+            if self.pipeline:
+                ctx = await self.pipeline.run(
                     message=message,
-                    history=history or [],
-                    metadata={}
+                    history=history or []
                 )
-                return result
+                return {
+                    "response": ctx.response,
+                    "metadata": ctx.metadata,
+                    "status": "success"
+                }
             return {"response": f"Echo: {message}", "status": "success"}
             
         # List Commands
@@ -495,7 +505,7 @@ class VaultBrain:
     
     def subscribe(self, event: str, handler: EventHandler) -> None:
         """Subscribe to an internal Python event."""
-        if not asyncio.iscoroutinefunction(handler):
+        if not inspect.iscoroutinefunction(handler):
             raise ValueError("Handler must be async")
         self.subscribers[event].append(handler)
         logger.debug(f"Subscribed to internal: {event}")
