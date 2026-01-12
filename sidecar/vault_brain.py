@@ -355,7 +355,7 @@ class VaultBrain:
             }
 
         # No "ui.notify" commands here. Plugins call brain.notify_frontend directly.
-            
+        
         # Register them
         # Note: We rely on WebSocketServer mapping "execute_command" -> brain.execute_command
         # But we also register these so internal plugins can call them if needed?
@@ -493,7 +493,6 @@ class VaultBrain:
         if not self.is_client_connected:
             logger.debug(f"Skipping '{event_type}': Client not connected")
             return
-
 
         # Construct JSON-RPC notification
         msg = utils.build_request(

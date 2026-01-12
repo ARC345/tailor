@@ -296,24 +296,18 @@ def ensure_directory(path: Path, create: bool = True) -> Path:
     
     return resolved
 
-
 def get_vault_config_path(vault_path: Path) -> Path:
     """Get the path to the vault configuration file."""
     return vault_path / constants.VAULT_CONFIG_FILE
-
 
 def get_memory_dir(vault_path: Path, create: bool = True) -> Path:
     """Get the memory directory for a vault."""
     return ensure_directory(vault_path / constants.MEMORY_DIR, create=create)
 
-
 def get_plugins_dir(vault_path: Path) -> Optional[Path]:
     """Get the plugins directory for a vault."""
     plugins_path = vault_path / constants.PLUGINS_DIR
     return plugins_path if plugins_path.exists() and plugins_path.is_dir() else None
-
-
-
 
 # =============================================================================
 # ID Generation / Info Utilities

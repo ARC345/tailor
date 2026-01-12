@@ -9,9 +9,8 @@ A vault-specific Python sidecar process providing:
 """
 
 __version__ = "0.1.0"
-__author__ = "Tailor Team"
+__author__ = "AGS Lab"
 
-# Public API exports
 # Public API exports
 from .websocket_server import WebSocketServer
 from .vault_brain import VaultBrain

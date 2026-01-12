@@ -187,7 +187,7 @@ class TestIntegration:
             "args": {"message": "Hello JSON"}
         }
         
-        result = await handler(params_correct)
+        result = await handler(**params_correct)
         assert result["echo"] == "Hello JSON"
         
         # Incorrect usage: args at top level (what caused the bug)
