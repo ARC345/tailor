@@ -663,8 +663,16 @@ class VaultBrain:
             self.subscribers[event].clear()
             logger.debug(f"Cleared subscribers for: {event}")
 
-    async def publish(self, event: str, **kwargs: Any) -> None:
-        """Publish an internal Python event."""
+    async def publish(self, event: str, sequential: bool = False, **kwargs: Any) -> None:
+        """
+        Publish an internal Python event.
+        
+        Args:
+            event: Event name
+            sequential: If True, await handlers one by one (useful for pipelines).
+                       If False, run all handlers in parallel (fire-and-forget).
+            **kwargs: Arguments to pass to handlers
+        """
         handlers = self.subscribers.get(event, [])
         if not handlers:
             return
@@ -674,9 +682,16 @@ class VaultBrain:
                 await h(**kwargs)
             except Exception as e:
                 logger.exception(f"Event handler failed for '{event}': {e}")
+                # For sequential execution, we might want to propagate errors?
+                # For now, let's log and continue to minimize disruption.
 
-        # Execute concurrent, isolated
-        await asyncio.gather(*(safe_exec(h) for h in handlers))
+        if sequential:
+            # Execute sequentially
+            for h in handlers:
+                await safe_exec(h)
+        else:
+            # Execute concurrent, isolated
+            await asyncio.gather(*(safe_exec(h) for h in handlers))
 
 
     # =========================================================================

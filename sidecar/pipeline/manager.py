@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional, Callable, Awaitable
-from collections import defaultdict
 import asyncio
 from loguru import logger
 
@@ -10,40 +9,37 @@ EventHandler = Callable[[PipelineContext], Awaitable[None]]
 
 class PipelineManager:
     """
-    Central Orchestrator for Pipeline Events and Commands.
+    Central Orchestrator for Pipeline Events.
+    Delegates actual event handling to VaultBrain (Sequential Mode).
     """
     
     def __init__(self):
-        self._subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
         self._logger = logger.bind(component="PipelineManager")
 
+    @property
+    def brain(self):
+        from ..vault_brain import VaultBrain
+        return VaultBrain.get()
+
     def subscribe(self, event: str, handler: EventHandler) -> None:
-        """Register an async event handler."""
-        self._subscribers[event].append(handler)
-        self._logger.debug(f"Registered handler for {event}")
+        """Register an async event handler via VaultBrain."""
+        self.brain.subscribe(event, handler)
+        self._logger.debug(f"Registered handler for {event} (via VaultBrain)")
 
     async def emit(self, event: str, ctx: PipelineContext) -> None:
         """
-        Emit an event to all subscribers sequentially or in parallel.
-        For pipeline, sequential execution often makes sense to ensure order of transforms.
+        Emit a pipeline event sequentially.
         """
         if ctx.should_abort:
             return
 
         ctx.events_emitted.append(event)
 
-        handlers = self._subscribers.get(event, [])
-        if not handlers:
-            return
+        # Publish sequentially using VaultBrain
+        # This will call all handlers: handler(ctx=ctx)
+        # Note: Handlers must accept **kwargs, so 'ctx' will be passed as a kwarg.
+        await self.brain.publish(event, sequential=True, ctx=ctx)
         
-        # We execute sequentially to allow modifications to flow down the chain
-        for handler in handlers:
-            try:
-                await handler(ctx)
-                if ctx.should_abort:
-                    self._logger.info(f"Pipeline aborted during {event}: {ctx.abort_reason}")
-                    return
-            except Exception as e:
-                self._logger.error(f"Error in handler for {event}: {e}")
-                # We don't abort on handler error, just log? Or should we?
-                # For now, continue but log.
+        if ctx.should_abort:
+            self._logger.info(f"Pipeline aborted during {event}: {ctx.abort_reason}")
+
