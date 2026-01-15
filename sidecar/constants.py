@@ -126,9 +126,15 @@ class UIAction(str, Enum):
     REGISTER_TOOLBAR = "register_toolbar"
     """Register a toolbar button."""
     
-    # Stage (main content area)
+    # Stage/Toolbox (main content area)
     SET_STAGE = "set_stage"
-    """Set stage content."""
+    """Set stage content (Legacy)."""
+
+    SET_TOOLBOX = "set_toolbox"
+    """Set toolbox content."""
+    
+    ADD_TOOLBOX_ITEM = "add_toolbox_item"
+    """Add item to toolbox."""
     
     # Modal
     SHOW_MODAL = "show_modal"

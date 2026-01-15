@@ -11,7 +11,7 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 from .types import PipelineConfig, PipelineContext
-from .manager import PipelineManager
+from .types import PipelineConfig, PipelineContext
 from .nodes import PipelineNodes
 
 class DefaultPipeline:
@@ -21,8 +21,7 @@ class DefaultPipeline:
     Steps: Input -> Context -> Prompt -> LLM -> PostProcess -> Output
     """
     
-    def __init__(self, manager: PipelineManager, config: PipelineConfig):
-        self.manager = manager
+    def __init__(self, config: PipelineConfig):
         self.config = config
         self._logger = logger.bind(component="DefaultPipeline")
         
@@ -30,7 +29,7 @@ class DefaultPipeline:
         self._init_llm()
         
         # Initialize Graph
-        self.nodes = PipelineNodes(manager, self._llm)
+        self.nodes = PipelineNodes(self._llm)
         self.graph = self._build_graph()
 
     def _init_llm(self):

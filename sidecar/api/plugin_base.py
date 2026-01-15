@@ -10,12 +10,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, TYPE_CHECKING, cast, Callable, Awaitable
 
 # Handle imports for both package context (tests) and standalone context (plugins)
-try:
-    from sidecar import utils
-    from sidecar import constants
-except ImportError:
-    from sidecar import utils
-    from sidecar import constants
+from sidecar import utils
+from sidecar import constants
 
 if TYPE_CHECKING:
     from sidecar.vault_brain import VaultBrain
@@ -319,17 +315,42 @@ class PluginBase(ABC):
 
     # --- Stage Content ---
 
+    # --- Toolbox Content ---
+
+    async def set_toolbox_content(self, html_content: str) -> None:
+        """
+        Set HTML content for the toolbox area.
+        
+        Args:
+            html_content: HTML string to display
+        """
+        self._emit_ui_command(
+            constants.UIAction.SET_TOOLBOX,
+            {"html": html_content}
+        )
+
+    async def add_toolbox_item(self, html_content: str) -> None:
+        """
+        Add an item (HTML) to the toolbox area.
+        
+        Args:
+            html_content: HTML string for the item
+        """
+        self._emit_ui_command(
+            constants.UIAction.ADD_TOOLBOX_ITEM,
+            {"html": html_content}
+        )
+
     async def set_stage_content(self, html_content: str) -> None:
         """
         Set HTML content for the main stage area.
+        DEPRECATED: Use set_toolbox_content instead.
         
         Args:
             html_content: HTML string to display in the stage
         """
-        self._emit_ui_command(
-            constants.UIAction.SET_STAGE,
-            {"html": html_content}
-        )
+        # For backward compatibility, map to toolbox
+        await self.set_toolbox_content(html_content)
 
     # --- Modal Dialogs ---
 

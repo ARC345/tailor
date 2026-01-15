@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional
 from loguru import logger
 
 from .types import PipelineConfig, PipelineContext
-from .manager import PipelineManager
+from .types import PipelineConfig, PipelineContext
 from .default import DefaultPipeline
 
 class GraphPipeline:
@@ -11,8 +11,7 @@ class GraphPipeline:
     Executes a configurable graph of Commands.
     """
     
-    def __init__(self, manager: PipelineManager, config: PipelineConfig):
-        self.manager = manager
+    def __init__(self, config: PipelineConfig):
         self.config = config
         self._logger = logger.bind(component="GraphPipeline")
         
@@ -32,5 +31,5 @@ class GraphPipeline:
         # so things don't break if someone accidentally toggles this mode.
         self._logger.warning("Graph execution not fully implemented. Falling back to linear flow.")
         
-        fallback = DefaultPipeline(self.manager, self.config)
+        fallback = DefaultPipeline(self.config)
         return await fallback.run(message, history)

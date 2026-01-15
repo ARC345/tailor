@@ -20,7 +20,7 @@ from . import constants
 from . import exceptions
 from .decorators import command, on_event
 
-from .pipeline import PipelineManager, DefaultPipeline, GraphPipeline, PipelineConfig
+from .pipeline import DefaultPipeline, GraphPipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
@@ -83,7 +83,6 @@ class VaultBrain:
         self.graph: Optional[Dict[str, Any]] = None
         
         # LLM Processing Pipeline
-        self.pipeline_manager = PipelineManager()
         self.pipeline: Optional[Any] = None # DefaultPipeline or GraphPipeline
         
         # Plugin Installer
@@ -95,13 +94,6 @@ class VaultBrain:
     async def initialize(self) -> None:
         """
         Perform full asynchronous initialization.
-        
-        This method handles:
-        1. Loading Configuration
-        2. Initializing Memory
-        3. Setting up Python Path
-        4. Registering Core Commands
-        5. Loading & Activating Plugins
         """
         logger.info("Starting VaultBrain initialization...")
         await self.publish(constants.CoreEvents.SYSTEM_STARTUP)
@@ -115,9 +107,9 @@ class VaultBrain:
         
         # Decide between Default and Graph pipeline
         if pipeline_config.is_graph_mode:
-            self.pipeline = GraphPipeline(self.pipeline_manager, pipeline_config)
+            self.pipeline = GraphPipeline(pipeline_config)
         else:
-            self.pipeline = DefaultPipeline(self.pipeline_manager, pipeline_config)
+            self.pipeline = DefaultPipeline(pipeline_config)
         
         # Register Core Commands
         self._register_core_commands()

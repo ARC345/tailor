@@ -75,13 +75,51 @@ class Plugin(PluginBase):
         """Called when frontend connects - register UI elements."""
         self.logger.info("Client connected - registering refiner UI")
         
-        # Register the refine button in the toolbar
-        await self.register_toolbar_button(
-            button_id="refiner_btn",
-            icon="sparkles",  # Lucide icon
-            title="Refine Prompt",
-            command="refiner.refine_from_ui"
-        )
+        # Add a refined button to the Toolbox (Right Panel)
+        # Using a nice card style for the item
+        html = """
+        <div style="
+            background: var(--surface-2);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        ">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="
+                    background: var(--primary-color);
+                    color: white;
+                    width: 32px; height: 32px;
+                    border-radius: 6px;
+                    display: flex; align-items: center; justify-content: center;
+                ">
+                    <i data-lucide="sparkles" style="width:18px; height:18px;"></i>
+                </div>
+                <div>
+                    <div style="font-weight:600; font-size:0.9rem;">Prompt Refiner</div>
+                    <div style="font-size:0.8rem; color:var(--text-secondary);">Improve your query</div>
+                </div>
+            </div>
+            
+            <button onclick="window.request('execute_command', {command: 'refiner.refine_from_ui'})" 
+                style="
+                background: transparent;
+                border: 1px solid var(--border-color);
+                color: var(--text-primary);
+                padding: 6px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                transition: all 0.2s;
+            " onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='transparent'">
+                Refine
+            </button>
+        </div>
+        """
+        
+        await self.add_toolbox_item(html)
         
         # Register a WebSocket handler for the UI button
         self.brain.ws_server.register_handler(
@@ -89,7 +127,7 @@ class Plugin(PluginBase):
             self._handle_refine_from_ui
         )
         
-        self.notify("Prompt Refiner ready! Click ✨ to refine your prompts.", severity="success")
+        self.notify("Prompt Refiner ready in Toolbox!", severity="success")
     
     async def _handle_refine_from_ui(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle refine request from UI - gets text from frontend."""
