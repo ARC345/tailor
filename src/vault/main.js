@@ -4,7 +4,7 @@
  * Initializes all vault components: managers, layout, connection, and plugins.
  */
 
-import { SidebarManager, PanelManager, ToolbarManager, ModalManager, StageManager } from './managers/index.js';
+import { SidebarManager, PanelManager, ToolbarManager, ModalManager, ToolboxManager } from './managers/index.js';
 import { initLayout, initResize, log } from './layout.js';
 import { autoConnect } from './connection.js';
 import { loadPlugins, handleEvent } from './plugins.js';
@@ -20,7 +20,7 @@ export function initVault() {
     const panels = new PanelManager();
     const toolbar = new ToolbarManager();
     const modal = new ModalManager();
-    const stage = new StageManager();
+    const toolbox = new ToolboxManager();
 
     // Expose logging function globally
     window.log = log;
@@ -40,8 +40,10 @@ export function initVault() {
         // Toolbar buttons
         registerToolbarButton: (id, icon, title, command) => toolbar.registerButton(id, icon, title, command),
 
-        // Stage content
-        setStageContent: (html) => stage.setContent(html),
+        // Toolbox/Stage content
+        setToolboxContent: (html) => toolbox.setContent(html),
+        addToolboxItem: (html) => toolbox.addItem(html),
+        setStageContent: (html) => toolbox.setContent(html), // Back-compat
 
         // Modal dialogs
         showModal: (title, html, width) => modal.show(title, html, width),

@@ -19,23 +19,28 @@ const config = {
         type: 'row',
         content: [
             {
-                type: 'component',
-                componentName: 'stage',
-                title: 'Stage',
-                width: 65
+                type: 'stack', // Main Chat Area
+                width: 65,
+                content: [
+                    {
+                        type: 'component',
+                        componentName: 'chat',
+                        title: 'LLM Chat'
+                    }
+                ]
             },
             {
-                type: 'column',
+                type: 'column', // Right Sidebar
                 width: 35,
                 content: [
                     {
                         type: 'stack',
-                        height: 40,
+                        height: 60,
                         content: [
                             {
                                 type: 'component',
-                                componentName: 'chat',
-                                title: 'LLM Chat'
+                                componentName: 'toolbox',
+                                title: 'Toolbox'
                             },
                             {
                                 type: 'component',
@@ -48,7 +53,7 @@ const config = {
                         type: 'component',
                         componentName: 'controls',
                         title: 'Inspector',
-                        height: 20
+                        height: 40
                     }
                 ]
             }
@@ -64,12 +69,27 @@ export function initLayout() {
     const myLayout = new GoldenLayout(config, layoutRoot);
 
     // Component: Stage
+    // Component: Toolbox
+    myLayout.registerComponent('toolbox', function (container, state) {
+        container.element.innerHTML = `
+            <div class="panel-container">
+                <div class="scrollable" id="toolbox-area" style="padding: 10px;">
+                    <!-- Default Plugin Area -->
+                    <div class="text-empty default-text">
+                        Toolbox Empty
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    // Backward compatibility for stage
     myLayout.registerComponent('stage', function (container, state) {
         container.element.innerHTML = `
             <div class="panel-container">
-                <div class="scrollable" id="plugin-area">
-                    <div style="color:var(--text-disabled); text-align:center; margin-top:50px;">
-                        Stage Area
+                <div class="scrollable">
+                        <div class="text-empty">
+                        Legacy Stage
                     </div>
                 </div>
             </div>

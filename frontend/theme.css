@@ -626,6 +626,31 @@ input:focus {
     font-size: 14px;
 }
 
+/* --- Components (Toolbox Only) --- */
+
+/* Toolbox Item */
+.toolbox-item {
+    background: var(--bg-panel);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-subtle);
+    margin-bottom: var(--spacing-md);
+    transition: all 0.2s;
+}
+
+.toolbox-item:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+/* Empty State Helper */
+.text-empty {
+    color: var(--text-disabled);
+    text-align: center;
+    margin-top: var(--spacing-2xl);
+    padding: var(--spacing-lg);
+}
+
 /* ===== PLUGIN MODAL STYLES ===== */
 
 /* Plugin Store Modal */

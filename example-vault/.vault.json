@@ -20,6 +20,9 @@
         },
         "prompt-refiner": {
             "enabled": true
+        },
+        "demo_plugin": {
+            "enabled": false
         }
     }
 }
