@@ -7,7 +7,7 @@ manages command/event exchange using JSON-RPC 2.0 protocol.
 
 import asyncio
 import json
-from typing import Optional, Dict, Any, Callable, Awaitable, cast
+from typing import Optional, Dict, Any, Callable, Awaitable
 import websockets
 from websockets.exceptions import ConnectionClosed
 import inspect

@@ -11,7 +11,6 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 from .types import PipelineConfig, PipelineContext
-from .types import PipelineConfig, PipelineContext
 from .nodes import PipelineNodes
 
 class DefaultPipeline:
