@@ -186,7 +186,7 @@ class VaultBrain:
     
         plugin_dirs = []
         for item in plugins_dir.iterdir():
-            if item.is_file()
+            if item.is_file():
                 continue
             if item.name.startswith(('.', '_')):
                 continue
@@ -350,13 +350,9 @@ class VaultBrain:
         
         if command_id in self.commands:
             handler = self.commands[command_id]["handler"]
-        elif self.ws_server and command_id in self.ws_server.command_handlers:
-            handler = self.ws_server.command_handlers[command_id]
         
         if handler is None:
             all_commands = list(self.commands.keys())
-            if self.ws_server:
-                all_commands.extend(list(self.ws_server.command_handlers.keys()))
             raise exceptions.CommandNotFoundError(command_id, all_commands)
         
         try:
@@ -406,6 +402,7 @@ class VaultBrain:
             }
         return {"response": f"Echo: {message}", "status": "success"}
 
+    @command("list_commands", constants.CORE_PLUGIN_NAME)
     @command("system.list_commands", constants.CORE_PLUGIN_NAME)
     async def list_commands(self) -> Dict[str, Any]:
         return {
@@ -614,18 +611,16 @@ class VaultBrain:
             # 4. Reload config
             self.config = self._load_config()
             
-
-            
-            # 6. Reload plugins
+            # 5. Reload plugins
             self._load_plugins()
             
-            # 7. Activate plugins
+            # 6. Activate plugins
             await self._activate_plugins()
             
-            # 8. Re-register decorated handlers
+            # 7. Re-register decorated handlers
             self._register_decorated_handlers()
             
-            # 9. Announce ready
+            # 8. Announce ready
             await self.publish(constants.CoreEvents.ALL_PLUGINS_LOADED)
             
             logger.info(f"Vault restarted: {len(self.plugins)} plugins loaded")
@@ -642,9 +637,7 @@ class VaultBrain:
     @property
     def is_client_connected(self) -> bool:
         """Check if frontend client is connected."""
-        if not self.ws_server:
-            return False
-        return self.ws_server.is_connected()
+        return self.ws_server and self.ws_server.is_connected()
 
     # =========================================================================
 
