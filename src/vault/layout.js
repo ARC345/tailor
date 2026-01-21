@@ -173,7 +173,7 @@ export function initLayout() {
                 }
 
                 try {
-                    const res = await window.request('execute_command', { command: cmd, args: args });
+                    const res = await window.request(cmd, args);
                     window.log(JSON.stringify(res.result, null, 2));
                 } catch (e) {
                     window.log(`Exec failed: ${e}`, 'error');

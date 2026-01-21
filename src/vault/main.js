@@ -58,14 +58,11 @@ export function initVault() {
             if (action.command && !action.handler) {
                 action.handler = async (message, itemId, context) => {
                     try {
-                        await request('execute_command', {
-                            command: action.command,
-                            args: {
-                                message: message?.content || '',
-                                role: message?.role || '',
-                                itemId,
-                                context
-                            }
+                        await request(action.command, {
+                            message: message?.content || '',
+                            role: message?.role || '',
+                            itemId,
+                            context
                         });
                     } catch (e) {
                         console.error(`[Action] Command ${action.command} failed:`, e);

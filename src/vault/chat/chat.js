@@ -242,16 +242,13 @@ async function sendMessage() {
     }
 
     try {
-        const res = await request('execute_command', {
-            command: 'chat.send',
-            args: {
-                message: message,
-                history: conversationHistory.slice(0, -1), // Exclude the just-added message
-                category: currentCategory,
-                stream: enableStreaming,
-                stream_id: streamId,
-                chat_id: activeChatId
-            }
+        const res = await request('chat.send', {
+            message: message,
+            history: conversationHistory.slice(0, -1), // Exclude the just-added message
+            category: currentCategory,
+            stream: enableStreaming,
+            stream_id: streamId,
+            chat_id: activeChatId
         });
 
         const result = res.result?.result || res.result || {};
@@ -493,28 +490,59 @@ function setupToolbarEventListeners() {
     });
 
     // Handle create branch
-    window.addEventListener('chat:createBranch', (e) => {
+    window.addEventListener('chat:createBranch', async (e) => {
         const { branchFrom, history } = e.detail;
 
-        // Clear current chat and start with branched history
-        conversationHistory = [...history];
-
-        const messagesEl = document.getElementById('chat-messages');
-        if (messagesEl) {
-            messagesEl.innerHTML = '';
+        if (!activeChatId) {
+            console.error('[Chat] Cannot branch: No active chat ID');
+            return;
         }
 
-        // Re-render messages from history
-        addSystemMessage(`Chat branched from: "${branchFrom.content.slice(0, 50)}..."`);
+        // Calculate index of the message we are branching from
+        // The 'history' in detail includes up to the message, so index is length-1
+        const messageIndex = history.length - 1;
 
-        history.forEach((msg, idx) => {
-            const msgEl = addMessage(msg.role, msg.content);
-            if (msgEl) {
-                msgEl.dataset.messageIndex = idx;
+        try {
+            setStatus('Branching...');
+
+            // Call backend to create branch
+            const res = await request('memory.create_branch', {
+                chat_id: activeChatId,
+                message_index: messageIndex
+            });
+
+            const result = res.result || {};
+
+            if (result.status === 'success') {
+                // Update local state with backend source of truth
+                conversationHistory = result.history || [];
+
+                const messagesEl = document.getElementById('chat-messages');
+                if (messagesEl) {
+                    messagesEl.innerHTML = '';
+                }
+
+                addSystemMessage(`Switched to branch: "${result.branch}"`);
+
+                // Re-render messages
+                conversationHistory.forEach((msg, idx) => {
+                    const msgEl = addMessage(msg.role, msg.content);
+                    if (msgEl) {
+                        msgEl.dataset.messageIndex = idx;
+                    }
+                });
+
+                setStatus('Ready');
+            } else {
+                console.error('[Chat] Branch error:', result.error);
+                addSystemMessage(`Failed to create branch: ${result.error}`, 'chat-message-error');
+                setStatus('Error');
             }
-        });
-
-        setStatus('Ready');
+        } catch (err) {
+            console.error('[Chat] Branch request failed:', err);
+            addSystemMessage(`Branch failed: ${err.message}`, 'chat-message-error');
+            setStatus('Error');
+        }
     });
 
     // Handle regenerate
@@ -551,15 +579,12 @@ function setupToolbarEventListeners() {
         const assistantMsgEl = addMessage('assistant', '', true);
 
         try {
-            const res = await request('execute_command', {
-                command: 'chat.send',
-                args: {
-                    message: userMessage,
-                    history: conversationHistory.slice(0, -1),
-                    category: currentCategory,
-                    model: model, // Override model if specified
-                    chat_id: activeChatId
-                }
+            const res = await request('chat.send', {
+                message: userMessage,
+                history: conversationHistory.slice(0, -1),
+                category: currentCategory,
+                model: model, // Override model if specified
+                chat_id: activeChatId
             });
 
             const result = res.result?.result || res.result || {};

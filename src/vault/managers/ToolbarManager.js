@@ -51,7 +51,7 @@ export class ToolbarManager {
             btn.onclick = async () => {
                 console.log(`[ToolbarManager] Executing command: ${command}`);
                 try {
-                    await window.request('execute_command', { command: command, args: {} });
+                    await window.request(command, {});
                 } catch (e) {
                     console.error(`[ToolbarManager] Command failed:`, e);
                 }

@@ -171,10 +171,7 @@ async function renderApiKeysSection(container) {
 
     // Load providers status
     try {
-        const res = await request('execute_command', {
-            command: 'settings.list_providers',
-            args: {}
-        });
+        const res = await request('settings.list_providers', {});
 
         const result = res.result?.result || res.result || {};
         providersStatus = result.providers || {};
@@ -271,10 +268,7 @@ window.saveApiKey = async function (provider) {
     }
 
     try {
-        const res = await request('execute_command', {
-            command: 'settings.store_api_key',
-            args: { provider, api_key: apiKey }
-        });
+        const res = await request('settings.store_api_key', { provider, api_key: apiKey });
 
         const result = res.result?.result || res.result || {};
 
@@ -295,10 +289,7 @@ window.deleteApiKey = async function (provider) {
     }
 
     try {
-        const res = await request('execute_command', {
-            command: 'settings.delete_api_key',
-            args: { provider }
-        });
+        const res = await request('settings.delete_api_key', { provider });
 
         const result = res.result?.result || res.result || {};
 
@@ -317,10 +308,7 @@ window.verifyApiKey = async function (provider) {
     const card = document.querySelector(`.api-key-card`);
 
     try {
-        const res = await request('execute_command', {
-            command: 'settings.verify_api_key',
-            args: { provider }
-        });
+        const res = await request('settings.verify_api_key', { provider });
 
         const result = res.result?.result || res.result || {};
 
@@ -344,10 +332,7 @@ window.detectOllama = async function () {
     statusEl.className = 'provider-status';
 
     try {
-        const res = await request('execute_command', {
-            command: 'settings.detect_ollama',
-            args: {}
-        });
+        const res = await request('settings.detect_ollama', {});
 
         const result = res.result?.result || res.result || {};
 
@@ -396,17 +381,11 @@ async function renderModelsSection(container) {
 
     try {
         // Load available models
-        const modelsRes = await request('execute_command', {
-            command: 'settings.get_available_models',
-            args: {}
-        });
+        const modelsRes = await request('settings.get_available_models', {});
         availableModels = modelsRes.result?.result?.models || modelsRes.result?.models || {};
 
         // Load category config
-        const catRes = await request('execute_command', {
-            command: 'settings.get_model_categories',
-            args: {}
-        });
+        const catRes = await request('settings.get_model_categories', {});
         const catResult = catRes.result?.result || catRes.result || {};
         categoriesInfo = catResult.categories_info || {};
         categoryConfig = catResult.configured || {};
@@ -492,10 +471,7 @@ window.setCategoryModel = async function (category, model) {
     if (!model) return;
 
     try {
-        const res = await request('execute_command', {
-            command: 'settings.set_model_category',
-            args: { category, model }
-        });
+        const res = await request('settings.set_model_category', { category, model });
 
         const result = res.result?.result || res.result || {};
 

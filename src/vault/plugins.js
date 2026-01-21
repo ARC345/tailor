@@ -39,8 +39,8 @@ export async function loadPlugins(retryCount = 0) {
         }
 
         // List Commands for plugins
-        const res = await request('list_commands');
-        logFn(`list_commands response: ${JSON.stringify(res).slice(0, 200)}`, 'in');
+        const res = await request('system.list_commands');
+        logFn(`system.list_commands response: ${JSON.stringify(res).slice(0, 200)}`, 'in');
 
         const commands = res.result?.commands || {};
         const commandList = Object.keys(commands);
@@ -131,22 +131,7 @@ export function handleEvent(evt) {
                 window.ui.closeModal();
                 break;
 
-            // Message Action Toolbar
-            case 'register_message_action':
-                // Legacy - auto-set location
-                console.log('[handleEvent] Registering message action (legacy):', data.id);
-                if (window.ui.registerAction) {
-                    window.ui.registerAction({
-                        id: data.id,
-                        icon: data.icon,
-                        label: data.label,
-                        position: data.position || 100,
-                        type: data.type || 'button',
-                        command: data.command,
-                        location: 'message-actionbar'
-                    });
-                }
-                break;
+
 
             // Action Toolbar (new API with location support)
             case 'register_action':

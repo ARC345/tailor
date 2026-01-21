@@ -455,13 +455,6 @@ class VaultBrain:
             }
         return {"response": f"Echo: {message}", "status": "success"}
 
-    @command("list_commands", constants.CORE_PLUGIN_NAME)
-    @command("system.list_commands", constants.CORE_PLUGIN_NAME)
-    async def list_commands(self) -> Dict[str, Any]:
-        return {
-            "commands": {k: v["plugin"] for k, v in self.commands.items()},
-            "count": len(self.commands)
-        }
 
     @command("system.info", constants.CORE_PLUGIN_NAME)
     async def get_info(self) -> Dict[str, Any]:
@@ -470,24 +463,7 @@ class VaultBrain:
             "plugins": list(self.plugins.keys())
         }
 
-    @command("execute_command", constants.CORE_PLUGIN_NAME)
-    async def execute_command_wrapper(self, command: str = "", args: Dict[str, Any] = None, **kwargs) -> Any:
-        """
-        Wrapper for executing commands via the 'execute_command' RPC method.
-        This maintains backward compatibility with frontend code that calls execute_command.
-        """
-        # Handle nested params
-        if not command:
-            p = kwargs.get("p") or kwargs.get("params")
-            if isinstance(p, dict):
-                command = p.get("command", command)
-                args = p.get("args", args)
-        
-        if not command:
-            return {"status": "error", "error": "command is required"}
-        
-        # Delegate to the actual command handler
-        return await self.execute_command(command, **(args or {}))
+
 
     # =========================================================================
     # Settings API Commands
@@ -561,6 +537,8 @@ class VaultBrain:
             "provider": provider,
             **result
         }
+
+
 
     @command("settings.get_available_models", constants.CORE_PLUGIN_NAME)
     async def get_available_models(self, **kwargs) -> Dict[str, Any]:

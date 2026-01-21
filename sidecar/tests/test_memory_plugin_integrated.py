@@ -62,7 +62,15 @@ async def test_memory_plugin_integrated():
     # Verify memory file created
     assert memory_file.exists()
     with open(memory_file, "r") as f:
-        memories = json.load(f)
+        data = json.load(f)
+    
+    # Handle V2 schema
+    if isinstance(data, dict) and "branches" in data:
+        active_branch = data.get("active_branch", "main")
+        memories = data["branches"][active_branch]
+    else:
+        memories = data
+        
     # Expect 2 messages: User + Assistant
     assert len(memories) == 2
     assert memories[0]["role"] == "user"

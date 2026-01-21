@@ -510,14 +510,28 @@ async function getAvailableModels() {
     if (modelsCache) return modelsCache;
 
     try {
-        // Try to fetch from backend
-        const result = await request('execute_command', {
-            command: 'models.list',
-            args: {}
-        });
+        // Try to fetch from backend using new API
+        const result = await request('settings.get_available_models', {});
 
         if (result?.result?.models) {
-            modelsCache = result.result.models;
+            // Flatten the models map (provider -> model[])
+            const flattened = [];
+            Object.entries(result.result.models).forEach(([provider, models]) => {
+                models.forEach(m => {
+                    // Try to normalize provider name if generic
+                    let p = m.provider;
+                    if (provider !== 'unknown') p = provider;
+
+                    flattened.push({
+                        id: m.id,
+                        name: m.name,
+                        provider: p.charAt(0).toUpperCase() + p.slice(1), // Capitalize
+                        categories: m.categories
+                    });
+                });
+            });
+
+            modelsCache = flattened;
             return modelsCache;
         }
     } catch (e) {
